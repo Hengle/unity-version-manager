@@ -7,7 +7,7 @@ use std::fmt;
 use std::result;
 use std::str::FromStr;
 use unity::Installation;
-
+use std::io;
 mod hash;
 pub mod manifest;
 
@@ -28,7 +28,7 @@ use self::win as sys;
 pub use self::hash::all_versions;
 pub use self::sys::read_version_from_path;
 
-#[derive(PartialEq, Eq, Ord, Hash, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, Ord, Hash, Debug, Clone, Copy, Deserialize)]
 pub enum VersionType {
     Alpha,
     Beta,
@@ -159,6 +159,19 @@ impl Version {
     pub fn revision(&self) -> u64 {
         self.revision
     }
+
+    pub fn base(&self) -> &semver::Version {
+        &self.base
+    }
+
+    pub fn as_semver(&self) -> semver::Version {
+        let mut v = self.base.clone();
+        if self.release_type != VersionType::Final {
+            v.pre.push(semver::Identifier::AlphaNumeric(self.release_type.to_string()));
+            v.pre.push(semver::Identifier::Numeric(self.revision));
+        }
+        v
+    }
 }
 
 impl From<(u64, u64, u64, u64)> for Version {
@@ -185,6 +198,12 @@ impl fmt::Display for VersionType {
                 VersionType::Alpha => write!(f, "a"),
             }
         }
+    }
+}
+
+impl Default for VersionType {
+    fn default() -> VersionType {
+        VersionType::Final
     }
 }
 
@@ -268,6 +287,53 @@ impl From<Installation> for Version {
     fn from(item: Installation) -> Self {
         item.version_owned()
     }
+}
+
+pub fn fetch_matching_version<I: Iterator<Item = Version>>(
+    versions: I,
+    version_req: semver::VersionReq,
+    release_type: VersionType,
+) -> io::Result<Version> {
+    versions
+        .filter(|version| {
+            let semver_version = if version.release_type() < &release_type {
+                debug!(
+                    "version {} release type is smaller than specified type {:#}",
+                    version, release_type
+                );
+                let mut semver_version = version.base().clone();
+                semver_version.pre.push(semver::Identifier::AlphaNumeric(
+                    version.release_type().to_string(),
+                ));
+                semver_version
+                    .pre
+                    .push(semver::Identifier::Numeric(version.revision()));
+                semver_version
+            } else {
+                let b = version.base().clone();
+                debug!(
+                    "use base semver version {} of {} for comparison",
+                    b, version
+                );
+                b
+            };
+
+            let is_match = version_req.matches(&semver_version);
+            if is_match {
+                info!("version {} is a match", version);
+            } else {
+                info!("version {} is not a match", version);
+            }
+
+            is_match
+        })
+        .max()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("no version found with req {}", version_req),
+            )
+        })
 }
 
 #[cfg(test)]

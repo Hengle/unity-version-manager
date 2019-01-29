@@ -10,6 +10,7 @@ pub use self::current_installation::current_installation;
 pub use self::current_installation::CurrentInstallation;
 pub use self::installation::Installation;
 pub use self::version::all_versions;
+pub use self::version::fetch_matching_version;
 pub use self::version::manifest::Manifest;
 pub use self::version::manifest::MD5;
 pub use self::version::Version;
