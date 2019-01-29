@@ -69,6 +69,11 @@ impl Component {
         None
     }
 
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    pub fn installpath(self) -> Option<PathBuf> {
+        None
+    }
+
     #[cfg(target_os = "macos")]
     pub fn install_location(self) -> Option<PathBuf> {
         self.installpath()
@@ -89,6 +94,11 @@ impl Component {
         };
 
         path.map(|p| Path::new(p).to_path_buf())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    pub fn install_location(self) -> Option<PathBuf> {
+        None
     }
 
     pub fn is_installed(self, unity_install_location: &Path) -> bool {
